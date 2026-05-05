@@ -6,7 +6,6 @@ import {
   ACESFilmicToneMapping,
 } from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { TAARenderPass } from 'three/examples/jsm/postprocessing/TAARenderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
@@ -38,7 +37,6 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
   renderer.toneMappingExposure = 1.0;
 
   const composer = new EffectComposer(renderer);
-  composer.addPass(new RenderPass(scene, camera));
 
   const taa = new TAARenderPass(scene, camera);
   taa.sampleLevel = 2;
@@ -59,12 +57,13 @@ export function createScene(canvas: HTMLCanvasElement): SceneBundle {
     camera.updateProjectionMatrix();
     renderer.setSize(w, h, false);
     composer.setSize(w, h);
-    smaa.setSize(w, h);
-    outline.setSize(w, h);
   }
 
   function dispose() {
     composer.dispose();
+    const gl = renderer.getContext();
+    const loseContextExt = gl.getExtension('WEBGL_lose_context');
+    loseContextExt?.loseContext();
     renderer.dispose();
   }
 
