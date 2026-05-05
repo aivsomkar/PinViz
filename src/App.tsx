@@ -1,5 +1,6 @@
 import { SvgFilters } from './components/SvgFilters';
 import { LandingScreen } from './components/LandingScreen';
+import { GlobeScene } from './components/GlobeScene';
 import { useViewStore } from './store/viewStore';
 
 export default function App() {
@@ -9,11 +10,7 @@ export default function App() {
     <>
       <SvgFilters />
       {view === 'landing' && <LandingScreen />}
-      {view === 'globe' && (
-        <div className="w-full h-full flex items-center justify-center">
-          <span style={{ color: 'var(--color-grey-400)' }}>Globe coming next…</span>
-        </div>
-      )}
+      {view === 'globe' && <GlobeScene />}
     </>
   );
 }
