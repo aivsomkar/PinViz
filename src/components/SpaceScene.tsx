@@ -14,8 +14,8 @@ import { computeLayout } from '../lib/computeLayout';
 import { usePhotoStore } from '../store/photoStore';
 import { useViewStore } from '../store/viewStore';
 
-const ZOOM_STEP = 0.92;          // each scroll tick multiplies distance by this (or its inverse)
-const ZOOM_LERP = 0.18;          // smoothing factor — closer to 1 = snappier, closer to 0 = lazier
+const ZOOM_STEP = 0.86;          // each scroll tick multiplies distance by this (or its inverse)
+const ZOOM_LERP = 0.25;          // smoothing factor — closer to 1 = snappier, closer to 0 = lazier
 const MIN_DISTANCE = 0.05;
 const MAX_DISTANCE = 5000;
 const TARGET_LERP = 0.18;        // smoothing for the controls.target shift
