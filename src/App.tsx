@@ -1,4 +1,5 @@
 import { SvgFilters } from './components/SvgFilters';
+import { AuthGate } from './components/AuthGate';
 import { LandingScreen } from './components/LandingScreen';
 import { ProcessingScreen } from './components/ProcessingScreen';
 import { SpaceScene } from './components/SpaceScene';
@@ -12,15 +13,17 @@ export default function App() {
   return (
     <>
       <SvgFilters />
-      {view === 'landing' && <LandingScreen />}
-      {view === 'processing' && <ProcessingScreen />}
-      {view === 'space' && (
-        <>
-          <SpaceScene />
-          <SpaceHud />
-          <PhotoLightbox />
-        </>
-      )}
+      <AuthGate>
+        {view === 'landing' && <LandingScreen />}
+        {view === 'processing' && <ProcessingScreen />}
+        {view === 'space' && (
+          <>
+            <SpaceScene />
+            <SpaceHud />
+            <PhotoLightbox />
+          </>
+        )}
+      </AuthGate>
     </>
   );
 }
