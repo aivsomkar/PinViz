@@ -18,6 +18,7 @@ const ZOOM_STEP = 0.86;          // each scroll tick multiplies distance by this
 const ZOOM_LERP = 0.25;          // smoothing factor — closer to 1 = snappier, closer to 0 = lazier
 const MIN_DISTANCE = 0.05;
 const MAX_DISTANCE = 5000;
+const TARGET_LERP = 0.18;        // smoothing for the controls.target shift
 
 export function SpaceScene() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -59,19 +60,17 @@ export function SpaceScene() {
     controlsBundle.controls.update();
 
     // ---- Smooth zoom state ----
-    // Both camera position and orbit target are lerp-targets. Zoom-to-cursor moves both
-    // toward the cursor focal so view direction is preserved (no rotation).
-    const targetCameraPos = camera.position.clone();
-    const targetOrbitTarget = controlsBundle.controls.target.clone();
+    let targetDistance = camera.position.distanceTo(controlsBundle.controls.target);
+    const targetTarget = controlsBundle.controls.target.clone();
     const camDir = new Vector3();
 
-    // Capture initial framing so the Reset button can snap back to it.
-    const initialCameraPos = camera.position.clone();
-    const initialOrbitTarget = controlsBundle.controls.target.clone();
+    // Capture the initial framing so the Reset button can snap back to it.
+    const initialDistance = targetDistance;
+    const initialTarget = targetTarget.clone();
     const unsubReset = useViewStore.subscribe((state, prev) => {
       if (state.resetCounter !== prev.resetCounter) {
-        targetCameraPos.copy(initialCameraPos);
-        targetOrbitTarget.copy(initialOrbitTarget);
+        targetDistance = initialDistance;
+        targetTarget.copy(initialTarget);
       }
     });
 
@@ -80,38 +79,21 @@ export function SpaceScene() {
       if (sign === 0) return;
       const magnitude = Math.min(Math.abs(deltaY) / magnitudeScale, 1.5);
       const factor = sign > 0 ? 1 / Math.pow(ZOOM_STEP, magnitude) : Math.pow(ZOOM_STEP, magnitude);
+      targetDistance = Math.max(MIN_DISTANCE, Math.min(MAX_DISTANCE, targetDistance * factor));
 
-      // Cursor world point at the current orbit target's depth (the focal plane).
-      camera.getWorldDirection(camDir);
-      const origin = new Vector3().setFromMatrixPosition(camera.matrixWorld);
-      const cursorRay = new Vector3(pointer.x, pointer.y, 0.5).unproject(camera).sub(origin).normalize();
-      const denom = cursorRay.dot(camDir);
-      const planeDistance = denom !== 0
-        ? targetOrbitTarget.clone().sub(origin).dot(camDir) / denom
-        : NaN;
-
-      if (Number.isFinite(planeDistance) && planeDistance > 0) {
-        // Move BOTH camera and target toward focal by (1 - factor). This is the
-        // standard "zoom toward cursor" math: it both scales the camera-target
-        // distance by `factor` AND keeps the cursor's world point glued under
-        // the cursor. Crucially, view direction is preserved → no rotation.
-        const focal = origin.clone().add(cursorRay.multiplyScalar(planeDistance));
-        const pull = 1 - factor;
-        targetCameraPos.lerp(focal, pull);
-        targetOrbitTarget.lerp(focal, pull);
-      } else {
-        // Fallback: pure dolly toward orbit target (no cursor info available).
-        const offset = targetCameraPos.clone().sub(targetOrbitTarget);
-        targetCameraPos.copy(targetOrbitTarget).add(offset.multiplyScalar(factor));
-      }
-
-      // Clamp camera-target distance to [MIN_DISTANCE, MAX_DISTANCE].
-      const offsetVec = targetCameraPos.clone().sub(targetOrbitTarget);
-      const dist = offsetVec.length();
-      if (dist < MIN_DISTANCE) {
-        targetCameraPos.copy(targetOrbitTarget).add(offsetVec.normalize().multiplyScalar(MIN_DISTANCE));
-      } else if (dist > MAX_DISTANCE) {
-        targetCameraPos.copy(targetOrbitTarget).add(offsetVec.normalize().multiplyScalar(MAX_DISTANCE));
+      // Zoom-to-cursor: pull the orbit target toward the world point under the cursor (zoom-in only).
+      // The pull is proportional to the per-event zoom magnitude so it stays smooth regardless of
+      // event rate (60Hz trackpad scroll vs ~10Hz mouse wheel) and capped at 0.25 per event.
+      if (sign < 0) {
+        camera.getWorldDirection(camDir);
+        const origin = new Vector3().setFromMatrixPosition(camera.matrixWorld);
+        const cursorRay = new Vector3(pointer.x, pointer.y, 0.5).unproject(camera).sub(origin).normalize();
+        const planeDistance = controlsBundle.controls.target.clone().sub(origin).dot(camDir) / cursorRay.dot(camDir);
+        if (Number.isFinite(planeDistance) && planeDistance > 0) {
+          const focal = origin.clone().add(cursorRay.multiplyScalar(planeDistance));
+          const pull = Math.min(magnitude * 0.15, 0.25);
+          targetTarget.lerp(focal, pull);
+        }
       }
     };
 
@@ -175,28 +157,14 @@ export function SpaceScene() {
     const tick = () => {
       raf = requestAnimationFrame(tick);
 
-      // Capture pre-update positions to detect user-pan after controls.update().
-      const preUpdateCamPos = camera.position.clone();
-      const preUpdateOrbitTarget = controlsBundle.controls.target.clone();
-
-      // Lerp toward smooth-zoom targets.
-      camera.position.lerp(targetCameraPos, ZOOM_LERP);
-      controlsBundle.controls.target.lerp(targetOrbitTarget, ZOOM_LERP);
-
-      // OrbitControls update — applies any user-pan input, modifies camera.position
-      // and controls.target together. Also calls camera.lookAt(target).
+      // Smooth zoom: lerp camera distance and target.
+      controlsBundle.controls.target.lerp(targetTarget, TARGET_LERP);
       controlsBundle.update();
-
-      // If OrbitControls' pan moved things, capture that delta and shift our smooth-
-      // zoom targets by the same amount so the pan persists across frames.
-      const panCam = camera.position.clone().sub(preUpdateCamPos);
-      const panTarget = controlsBundle.controls.target.clone().sub(preUpdateOrbitTarget);
-      // Only treat as pan if both camera and target shifted by roughly the same amount.
-      const panDelta = panCam.clone().sub(panTarget);
-      if (panDelta.lengthSq() < 1e-6) {
-        // It's a parallel pan (camera & target moved together).
-        targetCameraPos.add(panTarget);
-        targetOrbitTarget.add(panTarget);
+      const currentDistance = camera.position.distanceTo(controlsBundle.controls.target);
+      const newDistance = currentDistance + (targetDistance - currentDistance) * ZOOM_LERP;
+      if (Math.abs(newDistance - currentDistance) > 1e-4) {
+        const dir = camera.position.clone().sub(controlsBundle.controls.target).normalize();
+        camera.position.copy(controlsBundle.controls.target).add(dir.multiplyScalar(newDistance));
       }
 
       for (const c of cards) {
