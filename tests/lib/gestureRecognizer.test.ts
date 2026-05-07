@@ -119,3 +119,54 @@ describe('GestureRecognizer — single-hand pinch state machine', () => {
     expect(events.some((e) => e.type === 'pinchStart' && e.hand === 'Left')).toBe(false);
   });
 });
+
+describe('GestureRecognizer — two-hand pinch', () => {
+  it('emits twoPinchStart only when BOTH hands pinch', () => {
+    const r = new GestureRecognizer();
+    // Just left pinching — no two-pinch event.
+    let events = r.process(frame([pinchedHand('Left', 0.3, 0.5)]));
+    expect(events.some((e) => e.type === 'twoPinchStart')).toBe(false);
+
+    // Now both pinch.
+    events = r.process(frame([pinchedHand('Left', 0.3, 0.5), pinchedHand('Right', 0.7, 0.5)], 16));
+    const start = events.find((e) => e.type === 'twoPinchStart');
+    expect(start).toBeDefined();
+    if (start && start.type === 'twoPinchStart') {
+      expect(start.distance).toBeCloseTo(0.4, 1);
+      expect(start.center.x).toBeCloseTo(0.5, 1);
+    }
+  });
+
+  it('emits twoPinchMove with positive distanceDelta when hands move apart', () => {
+    const r = new GestureRecognizer();
+    r.process(frame([pinchedHand('Left', 0.4, 0.5), pinchedHand('Right', 0.6, 0.5)]));
+    const events = r.process(
+      frame([pinchedHand('Left', 0.3, 0.5), pinchedHand('Right', 0.7, 0.5)], 16),
+    );
+    const move = events.find((e) => e.type === 'twoPinchMove');
+    expect(move).toBeDefined();
+    if (move && move.type === 'twoPinchMove') {
+      expect(move.distanceDelta).toBeGreaterThan(0);
+    }
+  });
+
+  it('emits twoPinchMove with negative distanceDelta when hands move together', () => {
+    const r = new GestureRecognizer();
+    r.process(frame([pinchedHand('Left', 0.3, 0.5), pinchedHand('Right', 0.7, 0.5)]));
+    const events = r.process(
+      frame([pinchedHand('Left', 0.4, 0.5), pinchedHand('Right', 0.6, 0.5)], 16),
+    );
+    const move = events.find((e) => e.type === 'twoPinchMove');
+    expect(move).toBeDefined();
+    if (move && move.type === 'twoPinchMove') {
+      expect(move.distanceDelta).toBeLessThan(0);
+    }
+  });
+
+  it('emits twoPinchEnd when one hand stops pinching', () => {
+    const r = new GestureRecognizer();
+    r.process(frame([pinchedHand('Left', 0.3, 0.5), pinchedHand('Right', 0.7, 0.5)]));
+    const events = r.process(frame([pinchedHand('Left', 0.3, 0.5), openHand('Right', 0.7, 0.5)], 16));
+    expect(events.some((e) => e.type === 'twoPinchEnd')).toBe(true);
+  });
+});
