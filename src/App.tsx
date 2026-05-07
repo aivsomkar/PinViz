@@ -7,6 +7,7 @@ import { SpaceHud } from './components/SpaceHud';
 import { PhotoLightbox } from './components/PhotoLightbox';
 import { SpacesList } from './components/SpacesList';
 import { LoadingSpaceScreen } from './components/LoadingSpaceScreen';
+import { HandControl } from './components/HandControl';
 import { useViewStore } from './store/viewStore';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
           <>
             <SpaceScene />
             <SpaceHud />
+            <HandControl />
             <PhotoLightbox />
           </>
         )}
